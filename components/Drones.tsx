@@ -72,7 +72,7 @@ const getStatusColor = (status: DroneStatus) => {
 
 const DroneIcon = ({ drone, isAlerting }: { drone: Drone, isAlerting: boolean }) => (
     <div 
-        className="absolute transition-all duration-1000 ease-in-out" 
+        className="absolute transition-all duration-500 ease-linear" 
         style={{ left: `${drone.position.x}%`, top: `${drone.position.y}%` }}
         title={`Drone ${drone.id}`}
     >
@@ -160,15 +160,15 @@ const Drones: React.FC = () => {
                     const isActive = status === DroneStatus.InTransit || status === DroneStatus.Delivering || status === DroneStatus.Returning;
     
                     if (isActive) {
-                        x += (Math.random() - 0.5) * 4;
-                        y += (Math.random() - 0.5) * 4;
-                        newBattery = Math.max(0, battery - 0.2);
-                        newHealth = Math.max(0, health - (Math.random() * 0.01));
-                        newTelemetry.altitude = Math.min(CRUISING_ALTITUDE, telemetry.altitude + 5 + Math.random() * 2);
-                        newTelemetry.temperature = Math.min(MAX_TEMP, telemetry.temperature + 0.5 + Math.random() * 0.2);
+                        x += (Math.random() - 0.5) * 1;
+                        y += (Math.random() - 0.5) * 1;
+                        newBattery = Math.max(0, battery - 0.05);
+                        newHealth = Math.max(0, health - (Math.random() * 0.0025));
+                        newTelemetry.altitude = Math.min(CRUISING_ALTITUDE, telemetry.altitude + 1.25 + Math.random() * 0.5);
+                        newTelemetry.temperature = Math.min(MAX_TEMP, telemetry.temperature + 0.125 + Math.random() * 0.05);
                     } else {
-                        newTelemetry.altitude = Math.max(0, telemetry.altitude - 10);
-                        newTelemetry.temperature = Math.max(AMBIENT_TEMP, telemetry.temperature - 0.5);
+                        newTelemetry.altitude = Math.max(0, telemetry.altitude - 2.5);
+                        newTelemetry.temperature = Math.max(AMBIENT_TEMP, telemetry.temperature - 0.125);
                     }
                     
                     x = Math.max(0, Math.min(95, x));
@@ -215,7 +215,7 @@ const Drones: React.FC = () => {
                 
                 return nextDrones;
             });
-        }, 2000);
+        }, 500);
     
         return () => clearInterval(interval);
     }, [geofence, alertThresholds]);
