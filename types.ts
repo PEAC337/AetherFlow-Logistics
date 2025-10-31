@@ -1,4 +1,3 @@
-
 export enum OrderStatus {
   Pending = 'Pending',
   Processing = 'Processing',
@@ -7,13 +6,32 @@ export enum OrderStatus {
   Cancelled = 'Cancelled'
 }
 
+export interface OrderItem {
+  sku: string;
+  name: string;
+  quantity: number;
+  price: number;
+}
+
+export interface OrderHistory {
+  status: OrderStatus;
+  date: string;
+  notes?: string;
+}
+
 export interface Order {
   id: string;
   customerName: string;
   date: string;
   status: OrderStatus;
   total: number;
-  items: number;
+  items: OrderItem[];
+  shippingDetails: {
+    address: string;
+    carrier: string;
+    trackingNumber: string;
+  };
+  history: OrderHistory[];
 }
 
 export enum DroneStatus {
@@ -30,11 +48,19 @@ export interface Drone {
     model: string;
     status: DroneStatus;
     battery: number;
+    health: number; // New: Overall condition percentage
+    estimatedFlightTime: number; // New: In minutes
     position: {
         x: number;
         y: number;
     };
     payload: number;
+    orderId?: string; // New: Link to a specific order
+    telemetry: {
+      signalStrength: number; // New: 0-100%
+      temperature: number; // New: In Celsius
+      altitude: number; // New: In meters
+    }
 }
 
 export interface FeedbackItem {
