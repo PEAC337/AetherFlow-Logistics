@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { Drone, Order } from '../types';
 import { DroneStatus, OrderStatus } from '../types';
-import { Bot, Battery, Thermometer, Package, HeartPulse, Signal, ArrowUpCircle, Clock, Hash, AlertTriangle, XCircle, Edit, Settings, BatteryWarning, Rocket, CheckCircle } from 'lucide-react';
+import { Bot, Battery, Thermometer, Package, HeartPulse, Signal, Clock, Hash, AlertTriangle, XCircle, Edit, Settings, BatteryWarning, Rocket, CheckCircle } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const initialDrones: Drone[] = Array.from({ length: 10 }, (_, i) => ({
@@ -72,7 +72,7 @@ const getStatusColor = (status: DroneStatus) => {
 
 const DroneIcon = ({ drone, isAlerting }: { drone: Drone, isAlerting: boolean }) => (
     <div 
-        className="absolute transition-all duration-500 ease-linear" 
+        className="absolute transition-all duration-500 ease-linear cursor-pointer" 
         style={{ left: `${drone.position.x}%`, top: `${drone.position.y}%` }}
         title={`Drone ${drone.id}`}
     >
@@ -97,7 +97,7 @@ const TelemetryChart: React.FC<{
   title: string;
   unit: string;
 }> = ({ data, dataKey, strokeColor, title, unit }) => (
-  <div className="bg-gray-700 p-3 rounded-lg flex-1">
+  <div className="bg-gray-700/50 p-3 rounded-lg flex-1">
     <h4 className="text-sm font-semibold text-gray-300 mb-2 text-center">{title}</h4>
     <ResponsiveContainer width="100%" height={120}>
       <LineChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
@@ -295,6 +295,7 @@ const Drones: React.FC = () => {
         <div className="h-full flex flex-col space-y-6">
             <h1 className="text-3xl font-bold text-white">Drone Fleet Command</h1>
             <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6 min-h-0">
+                {/* --- LEFT COLUMN (Map) --- */}
                 <div 
                     className={`lg:col-span-2 bg-gray-800 rounded-lg shadow-lg p-4 relative overflow-hidden ${isDefiningGeofence ? 'cursor-crosshair' : ''}`}
                     ref={mapRef}
@@ -303,132 +304,145 @@ const Drones: React.FC = () => {
                     onMouseUp={handleMouseUp}
                     onMouseLeave={handleMouseUp}
                 >
-                    <div className="absolute inset-0 bg-transparent" style={{ backgroundSize: '40px 40px', backgroundImage: 'linear-gradient(to right, #4a5568 1px, transparent 1px), linear-gradient(to bottom, #4a5568 1px, transparent 1px)' }}></div>
+                    <div className="absolute inset-0 bg-transparent" style={{ backgroundSize: '40px 40px', backgroundImage: 'linear-gradient(to right, #4a556820 1px, transparent 1px), linear-gradient(to bottom, #4a556820 1px, transparent 1px)' }}></div>
                     {isDefiningGeofence && <div className="absolute inset-0 bg-black/50 flex items-center justify-center text-white text-lg font-semibold z-10">Click and drag to define the operational area</div>}
                     {geofence && <div className="absolute border-2 border-dashed border-yellow-400 bg-yellow-400/10 pointer-events-none" style={{ left: `${geofence.x}%`, top: `${geofence.y}%`, width: `${geofence.width}%`, height: `${geofence.height}%` }}></div>}
                     {drawingFence && <div className="absolute border-2 border-yellow-500 bg-yellow-500/20 pointer-events-none" style={{ left: `${drawingFence.x}%`, top: `${drawingFence.y}%`, width: `${drawingFence.width}%`, height: `${drawingFence.height}%` }}></div>}
-                    {drones.map(drone => <DroneIcon key={drone.id} drone={drone} isAlerting={alertDroneIds.has(drone.id)} />)}
+                    {/* FIX: Moved `key` prop to the wrapping div and removed it from DroneIcon to fix TypeScript error and React warning. */}
+                    {drones.map(drone => <div key={drone.id} onClick={() => setSelectedDrone(drone)}><DroneIcon drone={drone} isAlerting={alertDroneIds.has(drone.id)} /></div>)}
                 </div>
-                <div className="bg-gray-800 rounded-lg shadow-lg p-4 flex flex-col">
-                    <h2 className="text-xl font-semibold mb-4 text-white border-b border-gray-700 pb-2">Fleet Status</h2>
-                    <div className="flex-1 overflow-y-auto pr-2">
-                        {drones.map(drone => (
-                             <div key={drone.id} className={`p-3 rounded-lg mb-2 cursor-pointer transition-colors ${selectedDrone?.id === drone.id ? 'bg-cyan-900/50' : 'hover:bg-gray-700'} ${alertDroneIds.has(drone.id) ? 'ring-2 ring-red-500' : ''}`} onClick={() => setSelectedDrone(drone)}>
-                                <div className="flex justify-between items-center">
-                                    <span className="font-bold">{drone.id}</span>
-                                    <span className={`text-sm font-medium ${getStatusColor(drone.status)}`}>{drone.status}</span>
-                                </div>
-                                <div className="space-y-1.5 mt-2">
-                                    <div className="w-full bg-gray-600 rounded-full h-1.5"><div title={`Battery: ${drone.battery.toFixed(0)}%`} className="bg-green-500 h-1.5 rounded-full" style={{width: `${drone.battery}%`}}></div></div>
-                                    <div className="w-full bg-gray-600 rounded-full h-1.5"><div title={`Health: ${drone.health.toFixed(0)}%`} className="bg-cyan-500 h-1.5 rounded-full" style={{width: `${drone.health}%`}}></div></div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-                <div className="bg-gray-800 rounded-lg shadow-lg p-6 space-y-6">
-                     <div>
-                        <h3 className="text-xl font-bold text-white mb-3">Geofence Controls</h3>
-                        <div className="flex space-x-4">
-                            <button onClick={() => setIsDefiningGeofence(true)} disabled={isDefiningGeofence} className="flex items-center bg-cyan-500 hover:bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                                <Edit className="h-5 w-5 mr-2" /> Define Zone
-                            </button>
-                            <button onClick={() => setGeofence(null)} disabled={!geofence} className="flex items-center bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors disabled:opacity-50">
-                                <XCircle className="h-5 w-5 mr-2" /> Clear Zone
-                            </button>
+                {/* --- RIGHT COLUMN (Fleet List, Selected Drone, Controls) --- */}
+                <div className="lg:col-span-1 flex flex-col gap-6 min-h-0 overflow-y-auto pr-2">
+                    <div className="bg-gray-800 rounded-lg shadow-lg p-4 flex flex-col">
+                        <h2 className="text-xl font-semibold mb-4 text-white border-b border-gray-700 pb-2">Fleet Status</h2>
+                        <div className="space-y-2">
+                            {drones.map(drone => (
+                                <div key={drone.id} className={`p-3 rounded-lg cursor-pointer transition-colors ${selectedDrone?.id === drone.id ? 'bg-cyan-900/50' : 'hover:bg-gray-700'} ${alertDroneIds.has(drone.id) ? 'ring-2 ring-red-500' : ''}`} onClick={() => setSelectedDrone(drone)}>
+                                    <div className="flex justify-between items-center">
+                                        <span className="font-bold">{drone.id}</span>
+                                        <span className={`text-sm font-medium ${getStatusColor(drone.status)}`}>{drone.status}</span>
+                                    </div>
+                                    <div className="space-y-1.5 mt-2">
+                                        <div className="w-full bg-gray-600 rounded-full h-1.5"><div title={`Battery: ${drone.battery.toFixed(0)}%`} className="bg-green-500 h-1.5 rounded-full" style={{width: `${drone.battery}%`}}></div></div>
+                                        <div className="w-full bg-gray-600 rounded-full h-1.5"><div title={`Health: ${drone.health.toFixed(0)}%`} className="bg-cyan-500 h-1.5 rounded-full" style={{width: `${drone.health}%`}}></div></div>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     </div>
-                     <div>
-                        <h3 className="text-xl font-bold text-white mb-3 flex items-center"><Settings className="h-5 w-5 mr-2"/>Alert Thresholds</h3>
-                        <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                                <label htmlFor="battery" className="text-gray-300">Low Battery Threshold (%)</label>
-                                <input type="number" id="battery" name="battery" value={alertThresholds.battery} onChange={handleThresholdChange} className="w-24 bg-gray-700 text-white rounded p-1 text-center"/>
+
+                    {selectedDrone ? (
+                        <div className="bg-gray-800 rounded-lg shadow-lg p-6 space-y-6">
+                            {/* Drone Info */}
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <h3 className="text-2xl font-bold text-cyan-400">{selectedDrone.id}</h3>
+                                    <p className="text-gray-400">{selectedDrone.model}</p>
+                                </div>
+                                <div className="flex items-center space-x-2 p-3 bg-gray-700/50 rounded-lg">
+                                    <Bot className={`h-6 w-6 ${getStatusColor(selectedDrone.status)}`} />
+                                    <div><p className="text-xs text-gray-400">Status</p><p className="font-semibold">{selectedDrone.status}</p></div>
+                                </div>
                             </div>
-                            <div className="flex items-center justify-between">
-                                <label htmlFor="temperature" className="text-gray-300">High Temp Threshold (°C)</label>
-                                <input type="number" id="temperature" name="temperature" value={alertThresholds.temperature} onChange={handleThresholdChange} className="w-24 bg-gray-700 text-white rounded p-1 text-center"/>
+                            
+                            {/* Detail Cards */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <DetailCard icon={Package} label="Payload" value={`${selectedDrone.payload} kg`} iconClass="text-yellow-400" />
+                                <DetailCard icon={Battery} label="Battery" value={`${selectedDrone.battery.toFixed(0)}%`} iconClass="text-green-400" />
+                                <DetailCard icon={HeartPulse} label="Health" value={`${selectedDrone.health.toFixed(0)}%`} iconClass="text-rose-400" />
+                                <DetailCard icon={Clock} label="Est. Flight Time" value={`${selectedDrone.estimatedFlightTime} min`} />
+                            </div>
+
+                            {/* Mission Control */}
+                            <div className="bg-gray-700/50 rounded-lg p-4">
+                                <h4 className="font-semibold text-white mb-3">Mission Control</h4>
+                                {selectedDrone.status === DroneStatus.Idle ? (
+                                    <div className="space-y-3">
+                                        <select 
+                                            value={selectedOrderToAssign} 
+                                            onChange={(e) => setSelectedOrderToAssign(e.target.value)}
+                                            className="w-full bg-gray-800 border border-gray-600 rounded-lg py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                                        >
+                                            <option value="">Select an order to assign...</option>
+                                            {availableOrders.map(order => (
+                                                <option key={order.id} value={order.id}>{order.id} - {order.customerName}</option>
+                                            ))}
+                                        </select>
+                                        <button onClick={handleAssignOrder} disabled={!selectedOrderToAssign} className="w-full flex items-center justify-center bg-cyan-500 hover:bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                            <Rocket className="h-5 w-5 mr-2" /> Assign & Deploy
+                                        </button>
+                                    </div>
+                                ) : selectedDrone.orderId ? (
+                                    <div className="space-y-3">
+                                        <DetailCard icon={Hash} label="Assigned Order" value={selectedDrone.orderId} />
+                                        <button onClick={handleCompleteMission} className="w-full flex items-center justify-center bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors">
+                                            <CheckCircle className="h-5 w-5 mr-2" /> Complete Mission
+                                        </button>
+                                    </div>
+                                ) : <p className="text-gray-400">Drone is not idle but has no order.</p>}
+                            </div>
+
+                            {/* Telemetry */}
+                            <div>
+                                <h3 className="text-xl font-bold mb-4 text-white">Live Instrument Panel</h3>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                    <TelemetryChart data={telemetryHistory[selectedDrone.id] || []} dataKey="signal" strokeColor="#06b6d4" title="Signal" unit="%" />
+                                    <TelemetryChart data={telemetryHistory[selectedDrone.id] || []} dataKey="temp" strokeColor="#f59e0b" title="Temp" unit="°C" />
+                                    <TelemetryChart data={telemetryHistory[selectedDrone.id] || []} dataKey="alt" strokeColor="#8b5cf6" title="Altitude" unit="m" />
+                                </div>
                             </div>
                         </div>
-                    </div>
-                </div>
-                <div className={`bg-gray-800 rounded-lg shadow-lg p-6 ${alerts.length > 0 ? 'border border-red-500/50' : 'border border-transparent'}`}>
-                    <h3 className="text-xl font-bold text-white mb-2 flex items-center">
-                        <AlertTriangle className={`h-6 w-6 mr-3 ${alerts.length > 0 ? 'text-red-500' : 'text-gray-500'}`} /> System Alerts ({alerts.length})
-                    </h3>
-                    <div className="max-h-32 overflow-y-auto pr-2">
-                        {alerts.length > 0 ? alerts.map(alert => (
-                            <div key={`${alert.droneId}-${alert.type}`} className="flex items-start text-sm p-2 bg-gray-700/50 rounded mb-1 space-x-3">
-                                <AlertIcon type={alert.type}/>
-                                <p>{alert.message}</p>
-                            </div>
-                        )) : <p className="text-gray-400">All systems normal.</p>}
-                    </div>
-                </div>
-            </div>
-
-             {selectedDrone && (
-                <div className="bg-gray-800 rounded-lg shadow-lg p-6">
-                  <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-                    <div className="lg:col-span-2 space-y-4">
-                      <div className="flex justify-between items-start">
+                    ) : (
+                        <div className="bg-gray-800 rounded-lg shadow-lg p-6 flex-1 flex flex-col items-center justify-center text-center text-gray-500">
+                           <Bot className="h-12 w-12 mb-4" />
+                           <h3 className="text-lg font-semibold">No Drone Selected</h3>
+                           <p className="text-sm">Click a drone on the map or in the list to view its live telemetry and controls.</p>
+                        </div>
+                    )}
+                    
+                    <div className="bg-gray-800 rounded-lg shadow-lg p-6 space-y-6">
                         <div>
-                          <h3 className="text-2xl font-bold text-cyan-400">{selectedDrone.id}</h3>
-                          <p className="text-gray-400">{selectedDrone.model}</p>
-                        </div>
-                        <div className="flex items-center space-x-2 p-3 bg-gray-700/50 rounded-lg">
-                          <Bot className={`h-6 w-6 ${getStatusColor(selectedDrone.status)}`} />
-                          <div><p className="text-xs text-gray-400">Status</p><p className="font-semibold">{selectedDrone.status}</p></div>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <DetailCard icon={Package} label="Payload" value={`${selectedDrone.payload} kg`} iconClass="text-yellow-400" />
-                        <DetailCard icon={Battery} label="Battery" value={`${selectedDrone.battery.toFixed(0)}%`} iconClass="text-green-400" />
-                        <DetailCard icon={HeartPulse} label="Health" value={`${selectedDrone.health.toFixed(0)}%`} iconClass="text-rose-400" />
-                        <DetailCard icon={Clock} label="Est. Flight Time" value={`${selectedDrone.estimatedFlightTime} min`} />
-                      </div>
-                       <div className="bg-gray-700/50 rounded-lg p-4">
-                          <h4 className="font-semibold text-white mb-3">Mission Control</h4>
-                          {selectedDrone.status === DroneStatus.Idle ? (
-                              <div className="space-y-3">
-                                <select 
-                                    value={selectedOrderToAssign} 
-                                    onChange={(e) => setSelectedOrderToAssign(e.target.value)}
-                                    className="w-full bg-gray-800 border border-gray-600 rounded-lg py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                                >
-                                    <option value="">Select an order to assign...</option>
-                                    {availableOrders.map(order => (
-                                        <option key={order.id} value={order.id}>{order.id} - {order.customerName}</option>
-                                    ))}
-                                </select>
-                                <button onClick={handleAssignOrder} disabled={!selectedOrderToAssign} className="w-full flex items-center justify-center bg-cyan-500 hover:bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                                    <Rocket className="h-5 w-5 mr-2" /> Assign & Deploy
+                            <h3 className="text-xl font-bold text-white mb-3">Geofence Controls</h3>
+                            <div className="flex space-x-4">
+                                <button onClick={() => setIsDefiningGeofence(true)} disabled={isDefiningGeofence} className="flex items-center bg-cyan-500 hover:bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <Edit className="h-5 w-5 mr-2" /> Define Zone
                                 </button>
-                              </div>
-                          ) : selectedDrone.orderId ? (
-                             <div className="space-y-3">
-                                <DetailCard icon={Hash} label="Assigned Order" value={selectedDrone.orderId} />
-                                <button onClick={handleCompleteMission} className="w-full flex items-center justify-center bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors">
-                                    <CheckCircle className="h-5 w-5 mr-2" /> Complete Mission
+                                <button onClick={() => setGeofence(null)} disabled={!geofence} className="flex items-center bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors disabled:opacity-50">
+                                    <XCircle className="h-5 w-5 mr-2" /> Clear Zone
                                 </button>
-                             </div>
-                          ) : <p className="text-gray-400">Drone is not idle but has no order.</p>}
-                      </div>
+                            </div>
+                        </div>
+                        <div>
+                            <h3 className="text-xl font-bold text-white mb-3 flex items-center"><Settings className="h-5 w-5 mr-2"/>Alert Thresholds</h3>
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <label htmlFor="battery" className="text-gray-300">Low Battery (%)</label>
+                                    <input type="number" id="battery" name="battery" value={alertThresholds.battery} onChange={handleThresholdChange} className="w-24 bg-gray-700 text-white rounded p-1 text-center"/>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <label htmlFor="temperature" className="text-gray-300">High Temp (°C)</label>
+                                    <input type="number" id="temperature" name="temperature" value={alertThresholds.temperature} onChange={handleThresholdChange} className="w-24 bg-gray-700 text-white rounded p-1 text-center"/>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div className="lg:col-span-3">
-                      <h3 className="text-xl font-bold mb-4 text-white">Live Instrument Panel</h3>
-                      <div className="flex flex-col space-y-4">
-                        <TelemetryChart data={telemetryHistory[selectedDrone.id] || []} dataKey="signal" strokeColor="#06b6d4" title="Signal Strength" unit="%" />
-                        <TelemetryChart data={telemetryHistory[selectedDrone.id] || []} dataKey="temp" strokeColor="#f59e0b" title="Core Temperature" unit="°C" />
-                        <TelemetryChart data={telemetryHistory[selectedDrone.id] || []} dataKey="alt" strokeColor="#8b5cf6" title="Altitude" unit="m" />
-                      </div>
+
+                    <div className={`bg-gray-800 rounded-lg shadow-lg p-6 ${alerts.length > 0 ? 'border border-red-500/50' : 'border border-transparent'}`}>
+                        <h3 className="text-xl font-bold text-white mb-2 flex items-center">
+                            <AlertTriangle className={`h-6 w-6 mr-3 ${alerts.length > 0 ? 'text-red-500' : 'text-gray-500'}`} /> System Alerts ({alerts.length})
+                        </h3>
+                        <div className="max-h-32 overflow-y-auto pr-2">
+                            {alerts.length > 0 ? alerts.map(alert => (
+                                <div key={`${alert.droneId}-${alert.type}`} className="flex items-start text-sm p-2 bg-gray-700/50 rounded mb-1 space-x-3">
+                                    <AlertIcon type={alert.type}/>
+                                    <p>{alert.message}</p>
+                                </div>
+                            )) : <p className="text-gray-400">All systems normal.</p>}
+                        </div>
                     </div>
-                  </div>
                 </div>
-             )}
+            </div>
         </div>
     );
 };
