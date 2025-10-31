@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { Drone } from '../types';
-import { DroneStatus } from '../types';
-import { Bot, Battery, Thermometer, Package, HeartPulse, Signal, ArrowUpCircle, Clock, Hash, AlertTriangle, XCircle, Edit, Settings, BatteryWarning } from 'lucide-react';
+import type { Drone, Order } from '../types';
+import { DroneStatus, OrderStatus } from '../types';
+import { Bot, Battery, Thermometer, Package, HeartPulse, Signal, ArrowUpCircle, Clock, Hash, AlertTriangle, XCircle, Edit, Settings, BatteryWarning, Rocket, CheckCircle } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const initialDrones: Drone[] = Array.from({ length: 10 }, (_, i) => ({
@@ -19,6 +19,14 @@ const initialDrones: Drone[] = Array.from({ length: 10 }, (_, i) => ({
         altitude: 0,
     },
 }));
+
+// Mock pending orders for assignment
+const mockPendingOrders: Partial<Order>[] = [
+    { id: 'ORD-004', customerName: 'Alice Johnson', status: OrderStatus.Pending, items: [{ quantity: 2, price: 160, name: 'Item', sku: 'A' }] },
+    { id: 'ORD-012', customerName: 'Tom Harris', status: OrderStatus.Pending, items: [{ quantity: 1, price: 50, name: 'Item', sku: 'B' }] },
+    { id: 'ORD-015', customerName: 'Olivia Chen', status: OrderStatus.Pending, items: [{ quantity: 3, price: 20, name: 'Item', sku: 'C' }] },
+];
+
 
 type TelemetryPoint = {
     time: number;
@@ -130,6 +138,8 @@ const Drones: React.FC = () => {
         temperature: 40, // Celsius
     });
     
+    const [selectedOrderToAssign, setSelectedOrderToAssign] = useState('');
+
     const mapRef = useRef<HTMLDivElement>(null);
     const isDrawing = useRef(false);
     const startPos = useRef({x: 0, y: 0});
@@ -156,11 +166,9 @@ const Drones: React.FC = () => {
                         newHealth = Math.max(0, health - (Math.random() * 0.01));
                         newTelemetry.altitude = Math.min(CRUISING_ALTITUDE, telemetry.altitude + 5 + Math.random() * 2);
                         newTelemetry.temperature = Math.min(MAX_TEMP, telemetry.temperature + 0.5 + Math.random() * 0.2);
-                        if (!newOrderId) newOrderId = `ORD-0${Math.floor(Math.random()*20) + 10}`;
                     } else {
                         newTelemetry.altitude = Math.max(0, telemetry.altitude - 10);
                         newTelemetry.temperature = Math.max(AMBIENT_TEMP, telemetry.temperature - 0.5);
-                        if(status === DroneStatus.Idle) newOrderId = undefined;
                     }
                     
                     x = Math.max(0, Math.min(95, x));
@@ -251,7 +259,37 @@ const Drones: React.FC = () => {
         setIsDefiningGeofence(false);
     };
 
+    const handleAssignOrder = () => {
+        if (!selectedDrone || !selectedOrderToAssign) return;
+
+        const orderPayload = mockPendingOrders.find(o => o.id === selectedOrderToAssign)?.items?.reduce((acc, item) => acc + item.quantity, 0) || 1;
+
+        const updatedDrones = drones.map(d => {
+            if (d.id === selectedDrone.id) {
+                return { ...d, orderId: selectedOrderToAssign, status: DroneStatus.InTransit, payload: orderPayload };
+            }
+            return d;
+        });
+        setDrones(updatedDrones);
+        setSelectedDrone(prev => prev ? { ...prev, orderId: selectedOrderToAssign, status: DroneStatus.InTransit, payload: orderPayload } : null);
+        setSelectedOrderToAssign('');
+    };
+    
+    const handleCompleteMission = () => {
+        if (!selectedDrone) return;
+        const updatedDrones = drones.map(d => {
+            if (d.id === selectedDrone.id) {
+                return { ...d, orderId: undefined, status: DroneStatus.Idle, payload: 0 };
+            }
+            return d;
+        });
+        setDrones(updatedDrones);
+        setSelectedDrone(prev => prev ? { ...prev, orderId: undefined, status: DroneStatus.Idle, payload: 0 } : null);
+    };
+
     const alertDroneIds = new Set(alerts.map(a => a.droneId));
+    const assignedOrderIds = new Set(drones.map(d => d.orderId).filter(Boolean));
+    const availableOrders = mockPendingOrders.filter(o => !assignedOrderIds.has(o.id));
 
     return (
         <div className="h-full flex flex-col space-y-6">
@@ -349,10 +387,35 @@ const Drones: React.FC = () => {
                       <div className="grid grid-cols-2 gap-4">
                         <DetailCard icon={Package} label="Payload" value={`${selectedDrone.payload} kg`} iconClass="text-yellow-400" />
                         <DetailCard icon={Battery} label="Battery" value={`${selectedDrone.battery.toFixed(0)}%`} iconClass="text-green-400" />
-                        {/* Fix: Corrected typo from `selected` to `selectedDrone` */}
                         <DetailCard icon={HeartPulse} label="Health" value={`${selectedDrone.health.toFixed(0)}%`} iconClass="text-rose-400" />
                         <DetailCard icon={Clock} label="Est. Flight Time" value={`${selectedDrone.estimatedFlightTime} min`} />
-                        {selectedDrone.orderId && <DetailCard icon={Hash} label="Assigned Order" value={selectedDrone.orderId} />}
+                      </div>
+                       <div className="bg-gray-700/50 rounded-lg p-4">
+                          <h4 className="font-semibold text-white mb-3">Mission Control</h4>
+                          {selectedDrone.status === DroneStatus.Idle ? (
+                              <div className="space-y-3">
+                                <select 
+                                    value={selectedOrderToAssign} 
+                                    onChange={(e) => setSelectedOrderToAssign(e.target.value)}
+                                    className="w-full bg-gray-800 border border-gray-600 rounded-lg py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                                >
+                                    <option value="">Select an order to assign...</option>
+                                    {availableOrders.map(order => (
+                                        <option key={order.id} value={order.id}>{order.id} - {order.customerName}</option>
+                                    ))}
+                                </select>
+                                <button onClick={handleAssignOrder} disabled={!selectedOrderToAssign} className="w-full flex items-center justify-center bg-cyan-500 hover:bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <Rocket className="h-5 w-5 mr-2" /> Assign & Deploy
+                                </button>
+                              </div>
+                          ) : selectedDrone.orderId ? (
+                             <div className="space-y-3">
+                                <DetailCard icon={Hash} label="Assigned Order" value={selectedDrone.orderId} />
+                                <button onClick={handleCompleteMission} className="w-full flex items-center justify-center bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors">
+                                    <CheckCircle className="h-5 w-5 mr-2" /> Complete Mission
+                                </button>
+                             </div>
+                          ) : <p className="text-gray-400">Drone is not idle but has no order.</p>}
                       </div>
                     </div>
                     <div className="lg:col-span-3">
