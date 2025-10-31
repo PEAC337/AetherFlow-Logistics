@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { Drone } from '../types';
 import { DroneStatus } from '../types';
-import { Bot, Battery, Thermometer, Package, HeartPulse, Signal, ArrowUpCircle, Clock, Hash, AlertTriangle, XCircle, Edit } from 'lucide-react';
+import { Bot, Battery, Thermometer, Package, HeartPulse, Signal, ArrowUpCircle, Clock, Hash, AlertTriangle, XCircle, Edit, Settings, BatteryWarning } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const initialDrones: Drone[] = Array.from({ length: 10 }, (_, i) => ({
@@ -35,9 +35,13 @@ interface Geofence {
     height: number;
 }
 
-interface GeofenceAlert {
+type AlertType = 'geofence' | 'battery' | 'temperature';
+
+interface SystemAlert {
     droneId: string;
     timestamp: number;
+    type: AlertType;
+    message: string;
 }
 
 const MAX_HISTORY_LENGTH = 30;
@@ -103,6 +107,15 @@ const TelemetryChart: React.FC<{
   </div>
 );
 
+const AlertIcon: React.FC<{type: AlertType}> = ({ type }) => {
+    switch (type) {
+        case 'geofence': return <AlertTriangle className="h-5 w-5 text-yellow-400 flex-shrink-0" />;
+        case 'battery': return <BatteryWarning className="h-5 w-5 text-orange-400 flex-shrink-0" />;
+        case 'temperature': return <Thermometer className="h-5 w-5 text-red-400 flex-shrink-0" />;
+        default: return null;
+    }
+}
+
 const Drones: React.FC = () => {
     const [drones, setDrones] = useState<Drone[]>(initialDrones);
     const [selectedDrone, setSelectedDrone] = useState<Drone | null>(drones[0]);
@@ -111,7 +124,11 @@ const Drones: React.FC = () => {
     const [geofence, setGeofence] = useState<Geofence | null>({ x: 5, y: 5, width: 90, height: 90 });
     const [isDefiningGeofence, setIsDefiningGeofence] = useState(false);
     const [drawingFence, setDrawingFence] = useState<Geofence | null>(null);
-    const [alerts, setAlerts] = useState<GeofenceAlert[]>([]);
+    const [alerts, setAlerts] = useState<SystemAlert[]>([]);
+    const [alertThresholds, setAlertThresholds] = useState({
+        battery: 20, // percentage
+        temperature: 40, // Celsius
+    });
     
     const mapRef = useRef<HTMLDivElement>(null);
     const isDrawing = useRef(false);
@@ -119,7 +136,7 @@ const Drones: React.FC = () => {
 
     useEffect(() => {
         const interval = setInterval(() => {
-            const currentAlerts: GeofenceAlert[] = [];
+            const currentAlerts: SystemAlert[] = [];
 
             setDrones(prevDrones => {
                 const nextDrones = prevDrones.map(drone => {
@@ -156,8 +173,16 @@ const Drones: React.FC = () => {
                     if (geofence && isActive) {
                         const isOutside = x < geofence.x || x > geofence.x + geofence.width || y < geofence.y || y > geofence.y + geofence.height;
                         if (isOutside) {
-                            currentAlerts.push({ droneId: drone.id, timestamp: Date.now() });
+                             currentAlerts.push({ droneId: drone.id, timestamp: Date.now(), type: 'geofence', message: `${drone.id} breached the geofence.` });
                         }
+                    }
+
+                    if (isActive && newBattery < alertThresholds.battery) {
+                        currentAlerts.push({ droneId: drone.id, timestamp: Date.now(), type: 'battery', message: `${drone.id} has low battery (${newBattery.toFixed(0)}%).` });
+                    }
+
+                    if (newTelemetry.temperature > alertThresholds.temperature) {
+                        currentAlerts.push({ droneId: drone.id, timestamp: Date.now(), type: 'temperature', message: `${drone.id} is overheating (${newTelemetry.temperature.toFixed(1)}°C).` });
                     }
 
                     return { ...drone, position: { x, y }, battery: newBattery, health: newHealth, telemetry: newTelemetry, estimatedFlightTime, orderId: newOrderId };
@@ -185,7 +210,12 @@ const Drones: React.FC = () => {
         }, 2000);
     
         return () => clearInterval(interval);
-    }, [geofence]);
+    }, [geofence, alertThresholds]);
+
+    const handleThresholdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = e.target;
+        setAlertThresholds(prev => ({...prev, [name]: parseFloat(value)}));
+    }
 
     const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
         if (!isDefiningGeofence || !mapRef.current) return;
@@ -260,28 +290,44 @@ const Drones: React.FC = () => {
                 </div>
             </div>
 
-            <div className="bg-gray-800 rounded-lg shadow-lg p-6 grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-                <div>
-                    <h3 className="text-xl font-bold text-white mb-3">Geofence Controls</h3>
-                    <div className="flex space-x-4">
-                        <button onClick={() => setIsDefiningGeofence(true)} disabled={isDefiningGeofence} className="flex items-center bg-cyan-500 hover:bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                            <Edit className="h-5 w-5 mr-2" /> Define Zone
-                        </button>
-                        <button onClick={() => setGeofence(null)} disabled={!geofence} className="flex items-center bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors disabled:opacity-50">
-                            <XCircle className="h-5 w-5 mr-2" /> Clear Zone
-                        </button>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                <div className="bg-gray-800 rounded-lg shadow-lg p-6 space-y-6">
+                     <div>
+                        <h3 className="text-xl font-bold text-white mb-3">Geofence Controls</h3>
+                        <div className="flex space-x-4">
+                            <button onClick={() => setIsDefiningGeofence(true)} disabled={isDefiningGeofence} className="flex items-center bg-cyan-500 hover:bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                <Edit className="h-5 w-5 mr-2" /> Define Zone
+                            </button>
+                            <button onClick={() => setGeofence(null)} disabled={!geofence} className="flex items-center bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors disabled:opacity-50">
+                                <XCircle className="h-5 w-5 mr-2" /> Clear Zone
+                            </button>
+                        </div>
+                    </div>
+                     <div>
+                        <h3 className="text-xl font-bold text-white mb-3 flex items-center"><Settings className="h-5 w-5 mr-2"/>Alert Thresholds</h3>
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <label htmlFor="battery" className="text-gray-300">Low Battery Threshold (%)</label>
+                                <input type="number" id="battery" name="battery" value={alertThresholds.battery} onChange={handleThresholdChange} className="w-24 bg-gray-700 text-white rounded p-1 text-center"/>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <label htmlFor="temperature" className="text-gray-300">High Temp Threshold (°C)</label>
+                                <input type="number" id="temperature" name="temperature" value={alertThresholds.temperature} onChange={handleThresholdChange} className="w-24 bg-gray-700 text-white rounded p-1 text-center"/>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <div className={`bg-gray-700/50 rounded-lg p-4 ${alerts.length > 0 ? 'border border-red-500' : 'border border-transparent'}`}>
+                <div className={`bg-gray-800 rounded-lg shadow-lg p-6 ${alerts.length > 0 ? 'border border-red-500/50' : 'border border-transparent'}`}>
                     <h3 className="text-xl font-bold text-white mb-2 flex items-center">
-                        <AlertTriangle className={`h-6 w-6 mr-3 ${alerts.length > 0 ? 'text-red-500' : 'text-gray-500'}`} /> Geofence Alerts ({alerts.length})
+                        <AlertTriangle className={`h-6 w-6 mr-3 ${alerts.length > 0 ? 'text-red-500' : 'text-gray-500'}`} /> System Alerts ({alerts.length})
                     </h3>
-                    <div className="max-h-24 overflow-y-auto pr-2">
+                    <div className="max-h-32 overflow-y-auto pr-2">
                         {alerts.length > 0 ? alerts.map(alert => (
-                            <div key={alert.droneId} className="text-red-400 p-2 bg-red-900/30 rounded mb-1">
-                                <strong>{alert.droneId}</strong> has breached the operational zone.
+                            <div key={`${alert.droneId}-${alert.type}`} className="flex items-start text-sm p-2 bg-gray-700/50 rounded mb-1 space-x-3">
+                                <AlertIcon type={alert.type}/>
+                                <p>{alert.message}</p>
                             </div>
-                        )) : <p className="text-gray-400">All drones are within the defined zone.</p>}
+                        )) : <p className="text-gray-400">All systems normal.</p>}
                     </div>
                 </div>
             </div>
@@ -303,6 +349,7 @@ const Drones: React.FC = () => {
                       <div className="grid grid-cols-2 gap-4">
                         <DetailCard icon={Package} label="Payload" value={`${selectedDrone.payload} kg`} iconClass="text-yellow-400" />
                         <DetailCard icon={Battery} label="Battery" value={`${selectedDrone.battery.toFixed(0)}%`} iconClass="text-green-400" />
+                        {/* Fix: Corrected typo from `selected` to `selectedDrone` */}
                         <DetailCard icon={HeartPulse} label="Health" value={`${selectedDrone.health.toFixed(0)}%`} iconClass="text-rose-400" />
                         <DetailCard icon={Clock} label="Est. Flight Time" value={`${selectedDrone.estimatedFlightTime} min`} />
                         {selectedDrone.orderId && <DetailCard icon={Hash} label="Assigned Order" value={selectedDrone.orderId} />}
@@ -313,7 +360,6 @@ const Drones: React.FC = () => {
                       <div className="flex flex-col space-y-4">
                         <TelemetryChart data={telemetryHistory[selectedDrone.id] || []} dataKey="signal" strokeColor="#06b6d4" title="Signal Strength" unit="%" />
                         <TelemetryChart data={telemetryHistory[selectedDrone.id] || []} dataKey="temp" strokeColor="#f59e0b" title="Core Temperature" unit="°C" />
-                        {/* FIX: Corrected typo 'teleh' and completed the component with required props. */}
                         <TelemetryChart data={telemetryHistory[selectedDrone.id] || []} dataKey="alt" strokeColor="#8b5cf6" title="Altitude" unit="m" />
                       </div>
                     </div>
@@ -324,5 +370,4 @@ const Drones: React.FC = () => {
     );
 };
 
-// FIX: Added missing default export.
 export default Drones;
